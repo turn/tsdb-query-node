@@ -1,0 +1,19 @@
+# Copyright (C) 2011 Turn, Inc.  All Rights Reserved.
+# Proprietary and confidential.
+#
+# Git ignore patterns.
+# @author Arjun Satish <arjun.satish@turn.com>
+#
+
+/build/
+/target/
+
+# Intellij files we don't want to track
+/.idea/
+*.iml
+*.eml
+
+# Ignore various temp files
+*.swp
+*~
+.DS_Store
