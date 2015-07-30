@@ -4,13 +4,22 @@
  */
 package net.opentsdb.core;
 
+import javax.xml.crypto.Data;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.PriorityQueue;
+import java.util.TreeMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -55,26 +64,38 @@ public class TsdbQuerySplicer {
 		}
 
 		// if we have sufficient splices, execute them in parallel.
-		List<ListenableFuture<DataPoints[]>> resultFutureList = Lists.newArrayList();
+		List<ListenableFuture<Result>> resultFutureList = Lists.newArrayList();
 		for (final TsdbQuery splice : splices) {
-			ListenableFuture<DataPoints[]> aggFuture =
-					Futures.transform(POOL.submit(new SpliceDataFetch(splice)), FETCH_AND_AGG);
+			ListenableFuture<Result> aggFuture =
+					Futures.transform(POOL.submit(new SpliceFetch(splice)), FETCH_AND_AGG);
 			resultFutureList.add(aggFuture);
 		}
 
-		ListenableFuture<List<DataPoints[]>> resultListFuture = Futures.allAsList(resultFutureList);
+		ListenableFuture<List<Result>> resultListFuture = Futures.allAsList(resultFutureList);
 
 		DataPoints[] joinedResults = join(resultListFuture);
-
 		LOG.info("# of Joined results = " + joinedResults.length);
 
 		return joinedResults;
 	}
 
-	private DataPoints[] join(ListenableFuture<List<DataPoints[]>> resultListFuture) {
+	public DataPoints[] join(ListenableFuture<List<Result>> resultListFuture) {
 		try {
-			List<DataPoints[]> results = resultListFuture.get();
-			return results.get(0);
+			List<Result> results = resultListFuture.get();
+			List<PostAggregatedDataPoints[]> rdp = new ArrayList<PostAggregatedDataPoints[]>();
+			for (Result r: results) {
+				if (r.datapoints instanceof PostAggregatedDataPoints[]) {
+					rdp.add(((PostAggregatedDataPoints[]) r.datapoints));
+				} else {
+					LOG.error("Data point format conversion at join stage.");
+					rdp.add(PostAggregatedDataPoints.fromArray(r.datapoints));
+				}
+			}
+
+			AggregateAppender appender = new AggregateAppender(rdp);
+			List<PostAggregatedDataPoints> result = appender.append(appender.orderAggregates());
+			LOG.info("Final result has {} aggregates", result.size());
+			return result.toArray(new DataPoints[result.size()]);
 		} catch (InterruptedException e) {
 			LOG.error("Thread Interrupted", e);
 		} catch (ExecutionException e) {
@@ -84,77 +105,242 @@ public class TsdbQuerySplicer {
 		return new DataPoints[0];
 	}
 
-	static AsyncFunction<Result, DataPoints[]> FETCH_AND_AGG = new AsyncFunction<Result, DataPoints[]>() {
+	static class AggregateAppender {
+		private final List<PostAggregatedDataPoints[]> rdp;
+		private final int numAggregates;
+
+		public AggregateAppender(List<PostAggregatedDataPoints[]> rdp) {
+			Preconditions.checkNotNull(rdp);
+
+			if (rdp.size() == 0) {
+				this.rdp = new ArrayList<PostAggregatedDataPoints[]>();
+				this.rdp.add(new PostAggregatedDataPoints[]{});
+			} else {
+				this.rdp = rdp;
+			}
+
+			numAggregates = rdp.get(0).length;
+			for (PostAggregatedDataPoints[] aggs: rdp) {
+				if (aggs.length != numAggregates) {
+					throw new IllegalArgumentException(
+							"not enough params " + aggs.length + ", " + numAggregates);
+				}
+			}
+		}
+
+		public List<List<PostAggregatedDataPoints>> orderAggregates() {
+			List<List<PostAggregatedDataPoints>> flattened = new ArrayList<List<PostAggregatedDataPoints>>();
+			if (rdp.size() == 0) {
+				return flattened;
+			}
+
+			if (rdp.size() == 1) {
+				flattened.add(Arrays.asList(rdp.get(0)));
+			}
+
+			PostAggregatedDataPoints[] first = rdp.get(0);
+			for (PostAggregatedDataPoints agg: first) {
+				ArrayList<PostAggregatedDataPoints> row = new ArrayList<PostAggregatedDataPoints>();
+				row.add(agg);
+				for (int i = 1; i < rdp.size(); i++) {
+					boolean found = false;
+					for (PostAggregatedDataPoints cell: rdp.get(i)) {
+						if (signatureMatches(cell, agg)) {
+							row.add(cell);
+							found = true;
+							break;
+						}
+					}
+
+					if (!found) {
+						LOG.error("Should not be here. No match for metric with signature: {}", signature(agg));
+					}
+
+				}
+				flattened.add(row);
+			}
+
+			return flattened;
+		}
+
+		private String signature(PostAggregatedDataPoints agg) {
+			return "metric=" + agg.metricName()
+					+ ", tags=" + agg.getTags()
+					+ ", aggregatedTags=" + agg.getAggregatedTags();
+		}
+
+		private boolean signatureMatches(PostAggregatedDataPoints first,
+		                                 PostAggregatedDataPoints cell) {
+			String metricName = first.metricName();
+			List<String> aggTags = first.getAggregatedTags();
+			Map<String, String> tags = first.getTags();
+
+			if (!metricName.equals(cell.metricName())) {
+				return false;
+			}
+
+			if (aggTags.size() != cell.getAggregatedTags().size()) {
+				return false;
+			}
+
+			if (!aggTags.containsAll(cell.getAggregatedTags())) {
+				return false;
+			}
+
+			if (tags.size() != cell.getTags().size()) {
+				return false;
+			}
+
+			for (Map.Entry<String, String> e: tags.entrySet()) {
+				String firstVal = tags.get(e.getKey());
+				String cellVal = cell.getTags().get(e.getKey());
+				if (!firstVal.equals(cellVal)) {
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		public List<PostAggregatedDataPoints> append(List<List<PostAggregatedDataPoints>> table) {
+			if (table == null || table.size() == 0) {
+				return Lists.newArrayList();
+			}
+
+			List<PostAggregatedDataPoints> individualRows = Lists.newArrayList();
+			for (List<PostAggregatedDataPoints> columns: table) {
+				PostAggregatedDataPoints compact = appendCols(columns);
+				individualRows.add(compact);
+			}
+
+			return individualRows;
+		}
+
+		public PostAggregatedDataPoints appendCols(List<PostAggregatedDataPoints> columns) {
+			if (columns.size() <= 1) {
+				throw new RuntimeException("Must be atleast 2 columns to append");
+			}
+
+			Map<Long, DataPoint> dedupMap = new TreeMap<Long, DataPoint>();
+			for (PostAggregatedDataPoints col: columns) {
+				for (DataPoint dp: col) {
+					dedupMap.put(dp.timestamp(), dp);
+				}
+			}
+
+			MutableDataPoint[] mdps = new MutableDataPoint[dedupMap.size()];
+			int i = 0;
+			for (Map.Entry<Long, DataPoint> e: dedupMap.entrySet()) {
+				if (e.getValue() instanceof MutableDataPoint) {
+					mdps[i++] = (MutableDataPoint) e.getValue();
+				} else {
+					mdps[i++] = MutableDataPoint.fromPoint(e.getValue());
+				}
+			}
+
+			// there must be atleast two columns  for this method to be called
+			return new PostAggregatedDataPoints(columns.get(0), mdps);
+		}
+
+		static Comparator<PostAggregatedDataPoints.SeekableViewImpl> SEEKVIEW_COMPARATOR =
+				new Comparator<PostAggregatedDataPoints.SeekableViewImpl>() {
+					@Override
+					public int compare(PostAggregatedDataPoints.SeekableViewImpl o1,
+					                   PostAggregatedDataPoints.SeekableViewImpl o2) {
+						return (int) (o1.currentPoint().timestamp() - o2.currentPoint().timestamp());
+					}
+				};
+
+	}
+
+	static AsyncFunction<Result, Result> FETCH_AND_AGG = new AsyncFunction<Result, Result>() {
 		@Override
-		public ListenableFuture<DataPoints[]> apply(Result result) throws Exception {
-			return POOL.submit(new AggregateDataPoints(result.datapoints, result.splice));
+		public ListenableFuture<Result> apply(Result intermediate) throws Exception {
+			return POOL.submit(new SpliceAggregator(intermediate));
 		}
 	};
 
-	static class AggregateDataPoints implements Callable<DataPoints[]> {
-		private final DataPoints[] rawData;
-		private final TsdbQuery splice;
+	static class SpliceAggregator implements Callable<Result> {
+		private final Result intermediate;
 
-		public AggregateDataPoints(DataPoints[] rawData, TsdbQuery splice) {
-			this.rawData = rawData;
-			this.splice = splice;
+		public SpliceAggregator(Result intermediate) {
+			this.intermediate = intermediate;
 		}
 
 		@Override
-		public DataPoints[] call() {
+		public Result call() {
+			long start = System.nanoTime();
+
+			DataPoints[] rawData = intermediate.datapoints;
+			TsdbQuery splice = intermediate.splice;
+
 			DataPoints[] processedPoints = new PostAggregatedDataPoints[rawData.length];
 			for (int ix = 0; ix < rawData.length; ix++) {
 				DataPoints points = rawData[ix];
 
-				LOG.info("For metric={}, tags={} aggTags={}", points.metricName(), points.getTags(), points.getAggregatedTags());
+				LOG.info("For metric={}, tags={} aggTags={}",
+						points.metricName(),
+						points.getTags(),
+						points.getAggregatedTags());
 
-				List<DataPoint> filteredPoints = Lists.newArrayList();
+				List<MutableDataPoint> filtered = Lists.newArrayList();
 				for (DataPoint point: points) {
-					long ts = point.timestamp();
-					if (ts >= (splice.getStartTime() * 1000) && ts <= (splice.getEndTime() * 1000)) {
-						MutableDataPoint dp;
-						if (point.isInteger()) {
-							dp = MutableDataPoint.ofLongValue(ts, point.longValue());
-						} else {
-							dp = MutableDataPoint.ofDoubleValue(ts, point.doubleValue());
-						}
+					long ts = point.timestamp() / 1000; // timestamp in seconds
+					if (ts >= splice.getStartTime() && ts <= splice.getEndTime()) {
+						MutableDataPoint dp = MutableDataPoint.fromPoint(point);
 						LOG.info("Found point {}", dp);
-						filteredPoints.add(dp);
+						filtered.add(dp);
 					}
 				}
 
-				processedPoints[ix] = new PostAggregatedDataPoints(points, filteredPoints.toArray(new DataPoint[filteredPoints.size()]));
+				processedPoints[ix] = PostAggregatedDataPoints.sortAndCreate(points, filtered);
 			}
-			return processedPoints;
+
+			long aggTimeInNanos = System.nanoTime() - start;
+			return new Result(splice, processedPoints, intermediate.spliceFetchTime, aggTimeInNanos);
 		}
 	}
 
-	static class SpliceDataFetch implements Callable<Result> {
+	static class SpliceFetch implements Callable<Result> {
 
 		private final TsdbQuery splice;
 
-		public SpliceDataFetch(TsdbQuery splice) {
+		public SpliceFetch(TsdbQuery splice) {
 			this.splice = splice;
 		}
 
 		@Override
 		public Result call() throws Exception {
+			long start = System.nanoTime();
+
 			DataPoints[] points = splice.runWithoutSplice().joinUninterruptibly();
-			LOG.info("Found {} datapoint collections", points != null ? points.length : "null");
-			return new Result(splice, points);
+			LOG.info("Found {} datapoint collections", points == null ? "null" : points.length);
+
+			long fetchTimeInNanos = System.nanoTime() - start;
+			return new Result(splice, points, fetchTimeInNanos);
 		}
 	}
 
 	static class Result {
 
-		TsdbQuery splice;
-		DataPoints[] datapoints;
+		final TsdbQuery splice;
+		final DataPoints[] datapoints;
 
-		public Result(TsdbQuery splice, DataPoints[] datapoints) {
+		// for instrumentation (numbers in ns)
+		final long spliceFetchTime;
+		final long spliceAggregationTime;
+
+		public Result(TsdbQuery splice, DataPoints[] datapoints, long spliceFetchTime) {
+			this(splice, datapoints, spliceFetchTime, -1);
+		}
+
+		public Result(TsdbQuery splice, DataPoints[] datapoints, long spliceFetchTime,
+		              long spliceAggregationTime) {
 			this.splice = splice;
 			this.datapoints = datapoints;
+			this.spliceFetchTime = spliceFetchTime;
+			this.spliceAggregationTime = spliceAggregationTime;
 		}
-		
 	}
 
 
@@ -189,5 +375,82 @@ public class TsdbQuerySplicer {
 		LOG.info("Last interval is {} to {}", end, endTime);
 
 		return splices;
+	}
+
+	static class FakeDataPoints extends PostAggregatedDataPoints {
+		final String metric;
+		final List<String> aggtags;
+		final Map<String, String> tags;
+
+		public FakeDataPoints(String metric, List<String> aggtags, Map<String, String> tags, MutableDataPoint[] mdps) {
+			super(null, mdps);
+			this.metric = metric;
+			this.aggtags = aggtags;
+			this.tags = tags;
+		}
+
+		@Override
+		public String metricName() {
+			return metric;
+		}
+
+		@Override
+		public Map<String, String> getTags() {
+			return tags;
+		}
+
+		@Override
+		public List<String> getAggregatedTags() {
+			return aggtags;
+		}
+
+	}
+
+	static PostAggregatedDataPoints fake(String metric,
+	                                     List<String> aggTags,
+	                                     Map<String, String> tags,
+	                                     long offset) {
+		MutableDataPoint[] mdps = new MutableDataPoint[10];
+		for (int i = 0; i < mdps.length; i++) {
+			mdps[i] = MutableDataPoint.ofLongValue(offset + (100 * i), i * i);
+		}
+		List<MutableDataPoint> list = Arrays.asList(mdps);
+		Collections.shuffle(list);
+
+		return new FakeDataPoints(metric, aggTags, tags, list.toArray(new MutableDataPoint[list.size()]));
+	}
+
+	public static void main(String[] args) {
+		List<PostAggregatedDataPoints[]> results = Lists.newArrayList();
+
+		List<PostAggregatedDataPoints> sample = Lists.newArrayList();
+		String[] domains = new String[]{"sjc2", "atl1", "atl2", "ams1", "hkg1"};
+		for (int i=0; i<5; i++) {
+			Map<String, String> tags = Maps.newHashMap();
+			tags.put("domain", domains[i]);
+			List<String> aggTags = Lists.newArrayList();
+			for (int j=i; j<5; j++) {
+				aggTags.add("ag" + i);
+			}
+			sample.add(fake("metric", aggTags, tags, i * 1000));
+		}
+
+		for (int i=0; i<3; i++) {
+			Collections.shuffle(sample);
+			results.add(sample.toArray(new PostAggregatedDataPoints[sample.size()]));
+		}
+
+		AggregateAppender appender = new AggregateAppender(results);
+		List<PostAggregatedDataPoints> compact = appender.append(appender.orderAggregates());
+		LOG.info("Final result has {} aggregates", compact.size());
+
+		for (PostAggregatedDataPoints padp: compact) {
+			String line = "";
+			LOG.info(padp.metricName() + " " + padp.getTags() + " " + padp.getAggregatedTags());
+			for (DataPoint dp: padp) {
+				line += "(" + dp.timestamp() + "," + dp.longValue() + ")";
+			}
+			LOG.info("line=" + line);
+		}
 	}
 }
