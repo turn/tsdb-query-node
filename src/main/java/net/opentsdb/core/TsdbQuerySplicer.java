@@ -241,16 +241,6 @@ public class TsdbQuerySplicer {
 			// there must be atleast two columns  for this method to be called
 			return new PostAggregatedDataPoints(columns.get(0), mdps);
 		}
-
-		static Comparator<PostAggregatedDataPoints.SeekableViewImpl> SEEKVIEW_COMPARATOR =
-				new Comparator<PostAggregatedDataPoints.SeekableViewImpl>() {
-					@Override
-					public int compare(PostAggregatedDataPoints.SeekableViewImpl o1,
-					                   PostAggregatedDataPoints.SeekableViewImpl o2) {
-						return (int) (o1.currentPoint().timestamp() - o2.currentPoint().timestamp());
-					}
-				};
-
 	}
 
 	static AsyncFunction<Result, Result> FETCH_AND_AGG = new AsyncFunction<Result, Result>() {
@@ -363,7 +353,7 @@ public class TsdbQuerySplicer {
 		LOG.info("First interval is {} to {}", startTime, end);
 
 		while (end + bucket_size < endTime) {
-			TsdbQuery splice = TsdbQuery.spliceOf(query, end, end + bucket_size);
+			TsdbQuery splice = TsdbQuery.spliceOf(query, end, end + bucket_size + (100));
 			splices.add(splice);
 			end = end + bucket_size;
 			LOG.info("Add interval# {} from {} to {}", splices.size(),
