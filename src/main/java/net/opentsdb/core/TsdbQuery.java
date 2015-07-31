@@ -419,8 +419,7 @@ final class TsdbQuery implements Query {
 		final short metric_width = tsdb.metrics.width();
 		final TreeMap<byte[], Span> spans = // The key is a row key from HBase.
 				new TreeMap<byte[], Span>(new SpanCmp(metric_width));
-		final ScannerClientPojo scannerClient = getScanner();
-		final Scanner scanner = scannerClient.scanner;
+		final Scanner scanner = getScanner();
 		final Deferred<TreeMap<byte[], Span>> results =
 				new Deferred<TreeMap<byte[], Span>>();
 
@@ -486,9 +485,6 @@ final class TsdbQuery implements Query {
 						}
 //						fos.close();
 						scanner.close();
-						if (scannerClient.client != null) {
-							scannerClient.client.shutdown().joinUninterruptibly();
-						}
 						return null;
 					}
 
@@ -659,7 +655,7 @@ final class TsdbQuery implements Query {
 	 *
 	 * @return A scanner to use for fetching data points
 	 */
-	protected ScannerClientPojo getScanner() throws HBaseException {
+	protected Scanner getScanner() throws HBaseException {
 		final short metric_width = tsdb.metrics.width();
 		final byte[] start_row = new byte[metric_width + Const.TIMESTAMP_BYTES];
 		final byte[] end_row = new byte[metric_width + Const.TIMESTAMP_BYTES];
@@ -709,17 +705,7 @@ final class TsdbQuery implements Query {
 			createAndSetFilter(scanner);
 		}
 		scanner.setFamily(TSDB.FAMILY);
-		return new ScannerClientPojo(hbClient, scanner);
-	}
-
-	class ScannerClientPojo {
-		final HBaseClient client;
-		final Scanner scanner;
-
-		public ScannerClientPojo(HBaseClient client, Scanner scanner) {
-			this.client = client;
-			this.scanner = scanner;
-		}
+		return scanner;
 	}
 
 	/**

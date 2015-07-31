@@ -89,7 +89,7 @@ public final class Internal {
 	 * @see TsdbQuery#getScanner
 	 */
 	public static Scanner getScanner(final Query query) {
-		return ((TsdbQuery) query).getScanner().scanner;
+		return ((TsdbQuery) query).getScanner();
 	}
 
 	/**
