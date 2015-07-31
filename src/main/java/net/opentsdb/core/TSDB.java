@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
 
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
@@ -45,6 +46,8 @@ import org.hbase.async.HBaseClient;
 import org.hbase.async.HBaseException;
 import org.hbase.async.KeyValue;
 import org.hbase.async.PutRequest;
+import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
+import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -184,7 +187,10 @@ public final class TSDB {
 	 */
 	public TSDB(final Config config) {
 		this(new HBaseClient(config.getString("tsd.storage.hbase.zk_quorum"),
-						config.getString("tsd.storage.hbase.zk_basedir")),
+						config.getString("tsd.storage.hbase.zk_basedir"),
+						new NioClientSocketChannelFactory(
+								Executors.newCachedThreadPool(), Executors.newCachedThreadPool(),
+								config.hasProperty("tsd.network.worker_threads") ? config.getInt("tsd.network.worker_threads") : 4)),
 				config);
 	}
 
