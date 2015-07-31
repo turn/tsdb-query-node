@@ -4,14 +4,14 @@
  */
 package net.opentsdb.core;
 
-import javax.xml.crypto.Data;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -21,7 +21,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.AsyncFunction;
-import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -30,9 +29,10 @@ import org.slf4j.LoggerFactory;
 
 public class TsdbQuerySplicer {
 
-	static ListeningExecutorService POOL = MoreExecutors.listeningDecorator(Executors.newCachedThreadPool());
+	public static ListeningExecutorService POOL = MoreExecutors.listeningDecorator(
+			Executors.newFixedThreadPool(100));
 
-	private static final Logger LOG = LoggerFactory.getLogger(TsdbQuery.class);
+	private static final Logger LOG = LoggerFactory.getLogger(TsdbQuerySplicer.class);
 
 	private final TSDB tsdb;
 	private final TsdbQuery query;
@@ -64,19 +64,71 @@ public class TsdbQuerySplicer {
 		}
 
 		// if we have sufficient splices, execute them in parallel.
+/*
 		List<ListenableFuture<Result>> resultFutureList = Lists.newArrayList();
 		for (final TsdbQuery splice : splices) {
 			ListenableFuture<Result> aggFuture =
 					Futures.transform(POOL.submit(new SpliceFetch(splice)), FETCH_AND_AGG);
 			resultFutureList.add(aggFuture);
 		}
+*/
+		List<Thread> threads = new ArrayList<Thread>();
+		for (final TsdbQuery splice: splices) {
+			Thread t = new Thread(new Runnable() {
+				@Override
+				public void run() {
+					try {
+						String curl = "/usr/bin/curl -s http://0.0.0.0:9000/api/query?"
+								+ "start=" + splice.getStartTime()
+								+ "&end="  + splice.getEndTime()
+								+ "&m=sum:20m-avg:rate:rate:turn.bid.rtb.bidrequest.bid";
+						LOG.info("Running curl={}", curl);
+						ProcessBuilder p = new ProcessBuilder();
+						p.command(curl.split(" "));
+						Process ps = p.start();
+						ps.waitFor();
 
-		ListenableFuture<List<Result>> resultListFuture = Futures.allAsList(resultFutureList);
+						BufferedReader reader = new BufferedReader(new InputStreamReader(ps.getInputStream()));
+						String line;
+						while ( (line = reader.readLine()) != null) {
+							LOG.info("curl >> " + line);
+						}
 
-		DataPoints[] joinedResults = join(resultListFuture);
-		LOG.info("# of Joined results = " + joinedResults.length);
+						reader = new BufferedReader(new InputStreamReader(ps.getErrorStream()));
+						while ( (line = reader.readLine()) != null) {
+							LOG.info("curl error >> " + line);
+						}
 
-		return joinedResults;
+						LOG.info("Exiting this mess");
+					} catch (IOException e) {
+						LOG.error("IOException ", e);
+					} catch (InterruptedException e) {
+						LOG.error("Interrupted Exception ", e);
+					}
+				}
+			}, "splice curl #" + splice.getStartTime());
+			t.start();
+			threads.add(t);
+		}
+
+		for (Thread t: threads) {
+			try {
+				t.join();
+			} catch (InterruptedException e) {
+				LOG.error("got interrupted", e);
+			}
+		}
+
+		LOG.info("Got results for all splice queries");
+
+//		ListenableFuture<List<Result>> resultListFuture = Futures.allAsList(resultFutureList);
+
+//		DataPoints[] joinedResults = join(resultListFuture);
+//		LOG.info("# results = {}", joinedResults.length);
+
+//		return joinedResults;
+		return new DataPoints[0];
+
 	}
 
 	public DataPoints[] join(ListenableFuture<List<Result>> resultListFuture) {
@@ -84,6 +136,9 @@ public class TsdbQuerySplicer {
 			List<Result> results = resultListFuture.get();
 			List<PostAggregatedDataPoints[]> rdp = new ArrayList<PostAggregatedDataPoints[]>();
 			for (Result r: results) {
+				LOG.info("hbaseScanTime={}, aggregationTime={}",
+						r.spliceFetchTime / (1000 * 1000),
+						r.spliceAggregationTime / (1000 * 1000));
 				if (r.datapoints instanceof PostAggregatedDataPoints[]) {
 					rdp.add(((PostAggregatedDataPoints[]) r.datapoints));
 				} else {
@@ -92,9 +147,12 @@ public class TsdbQuerySplicer {
 				}
 			}
 
+			long appendStart = System.nanoTime();
 			AggregateAppender appender = new AggregateAppender(rdp);
 			List<PostAggregatedDataPoints> result = appender.append(appender.orderAggregates());
-			LOG.info("Final result has {} aggregates", result.size());
+			long diff = System.nanoTime() - appendStart;
+			LOG.info("Final result has {} aggregates. Took {} ms", result.size(), diff / (1000 * 1000));
+
 			return result.toArray(new DataPoints[result.size()]);
 		} catch (InterruptedException e) {
 			LOG.error("Thread Interrupted", e);
@@ -278,7 +336,7 @@ public class TsdbQuerySplicer {
 					long ts = point.timestamp() / 1000; // timestamp in seconds
 					if (ts >= splice.getStartTime() && ts <= splice.getEndTime()) {
 						MutableDataPoint dp = MutableDataPoint.fromPoint(point);
-						LOG.info("Found point {}", dp);
+						LOG.debug("Found point {}", dp);
 						filtered.add(dp);
 					}
 				}
@@ -287,6 +345,7 @@ public class TsdbQuerySplicer {
 			}
 
 			long aggTimeInNanos = System.nanoTime() - start;
+			LOG.info("Finished aggregating splice #{} in {} ms", splice.getStartTime(), aggTimeInNanos / (1000 * 1000));
 			return new Result(splice, processedPoints, intermediate.spliceFetchTime, aggTimeInNanos);
 		}
 	}
@@ -304,9 +363,11 @@ public class TsdbQuerySplicer {
 			long start = System.nanoTime();
 
 			DataPoints[] points = splice.runWithoutSplice().joinUninterruptibly();
-			LOG.info("Found {} datapoint collections", points == null ? "null" : points.length);
-
 			long fetchTimeInNanos = System.nanoTime() - start;
+
+			LOG.info("Fetched {} datapoint collection in {} ms",
+					points == null ? "null" : points.length,
+					fetchTimeInNanos / (1000 * 1000));
 			return new Result(splice, points, fetchTimeInNanos);
 		}
 	}

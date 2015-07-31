@@ -12,21 +12,15 @@
 // see <http://www.gnu.org/licenses/>.
 package net.opentsdb.core;
 
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.nio.charset.Charset;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -38,9 +32,11 @@ import net.opentsdb.tsd.QueryStats;
 import net.opentsdb.uid.NoSuchUniqueName;
 import net.opentsdb.uid.UniqueId;
 import org.hbase.async.Bytes;
+import org.hbase.async.HBaseClient;
 import org.hbase.async.HBaseException;
 import org.hbase.async.KeyValue;
 import org.hbase.async.Scanner;
+import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -423,17 +419,10 @@ final class TsdbQuery implements Query {
 		final short metric_width = tsdb.metrics.width();
 		final TreeMap<byte[], Span> spans = // The key is a row key from HBase.
 				new TreeMap<byte[], Span>(new SpanCmp(metric_width));
-		final Scanner scanner = getScanner();
+		final ScannerClientPojo scannerClient = getScanner();
+		final Scanner scanner = scannerClient.scanner;
 		final Deferred<TreeMap<byte[], Span>> results =
 				new Deferred<TreeMap<byte[], Span>>();
-
-//		final FileOutputStream fos;
-//		try {
-//			fos = new FileOutputStream("/home/asatish/tsdb/"
-//					+ Thread.currentThread().getName().replaceAll("/", "-") + "-" + System.currentTimeMillis());
-//		} catch (FileNotFoundException e) {
-//			throw new RuntimeException(e);
-//		}
 
 		/**
 		 * Scanner callback executed recursively each time we get a set of data
@@ -450,6 +439,7 @@ final class TsdbQuery implements Query {
 			int hbase_time = 0; // milliseconds.
 			long starttime = System.nanoTime();
 			long timeout = tsdb.getConfig().getLong("tsd.query.timeout");
+			long scannerTime = 0;
 
 
 			long totalCompactionTime = 0;
@@ -461,6 +451,7 @@ final class TsdbQuery implements Query {
 			 * found
 			 */
 			public Object scan() {
+				// LOG.info("Starting scan for next set of rows");
 				starttime = System.nanoTime();
 				return scanner.nextRows().addCallback(this);
 			}
@@ -474,6 +465,7 @@ final class TsdbQuery implements Query {
 			public Object call(final ArrayList<ArrayList<KeyValue>> rows)
 					throws Exception {
 				hbase_time += (System.nanoTime() - starttime) / 1000000;
+				long scanStartTime = System.nanoTime();
 				try {
 
 					Timer.Context processScan = QueryStats.processScan().time();
@@ -482,9 +474,9 @@ final class TsdbQuery implements Query {
 						hbase_time += (System.nanoTime() - starttime) / 1000000;
 						scanlatency.add(hbase_time);
 						LOG.info(TsdbQuery.this + " matched " + nrows + " rows in " +
-								spans.size() + " spans in " + hbase_time + "ms");
-
-						LOG.info("hbase scan latency={} ms, compaction latency={} ms", hbase_time, totalCompactionTime / (1000 * 1000));
+								spans.size() + " spans in " + hbase_time + "ms. Compaction time= "
+								+ totalCompactionTime / (1000 * 1000));
+						LOG.info("Time spent in scanner alone = {} ms", scannerTime / (1000 * 1000));
 						QueryStats.hbaseScan().update(hbase_time, TimeUnit.MILLISECONDS);
 						QueryStats.queryCompactionTimer().update(totalCompactionTime, TimeUnit.NANOSECONDS);
 						if (nrows < 1 && !seenAnnotation) {
@@ -494,6 +486,9 @@ final class TsdbQuery implements Query {
 						}
 //						fos.close();
 						scanner.close();
+						if (scannerClient.client != null) {
+							scannerClient.client.shutdown().joinUninterruptibly();
+						}
 						return null;
 					}
 
@@ -501,11 +496,8 @@ final class TsdbQuery implements Query {
 						throw new InterruptedException("Query timeout exceeded!");
 					}
 
-					int totalSize = 0;
 					for (final ArrayList<KeyValue> row : rows) {
 						final byte[] key = row.get(0).key();
-//						fos.write(Arrays.toString(key).getBytes());
-//						fos.write("\n".getBytes());
 						if (Bytes.memcmp(metric, key, 0, metric_width) != 0) {
 							scanner.close();
 							throw new IllegalDataException(
@@ -521,13 +513,10 @@ final class TsdbQuery implements Query {
 
 						int size = datapoints.size();
 						QueryStats.numberOfScannedPointsCounter().inc(size);
-						totalSize += size;
 
 						long compactionTimeStart = System.nanoTime();
-						// LOG.info("Compacting metric={}, tags={}", RowKey.metricName(tsdb, key), Tags.getTags(tsdb, key));
 						final KeyValue compacted = tsdb.compact(row, datapoints.getAnnotations());
 						totalCompactionTime += (System.nanoTime() - compactionTimeStart);
-						// LOG.debug("Single compaction step took {} us.", (System.nanoTime() - compactionTimeStart) / 1000);
 
 						seenAnnotation |= !datapoints.getAnnotations().isEmpty();
 						if (compacted != null) { // Can be null if we ignored all KVs.
@@ -536,6 +525,7 @@ final class TsdbQuery implements Query {
 						}
 					}
 
+					// LOG.info("Got {} rows so far", nrows);
 					processScan.stop();
 
 					return scan();
@@ -543,6 +533,8 @@ final class TsdbQuery implements Query {
 					scanner.close();
 					results.callback(e);
 					return null;
+				} finally {
+					scannerTime += (System.nanoTime() - scanStartTime);
 				}
 			}
 		}
@@ -667,7 +659,7 @@ final class TsdbQuery implements Query {
 	 *
 	 * @return A scanner to use for fetching data points
 	 */
-	protected Scanner getScanner() throws HBaseException {
+	protected ScannerClientPojo getScanner() throws HBaseException {
 		final short metric_width = tsdb.metrics.width();
 		final byte[] start_row = new byte[metric_width + Const.TIMESTAMP_BYTES];
 		final byte[] end_row = new byte[metric_width + Const.TIMESTAMP_BYTES];
@@ -695,6 +687,13 @@ final class TsdbQuery implements Query {
 			System.arraycopy(metric, 0, end_row, 0, metric_width);
 		}
 
+//		HBaseClient hbClient = new HBaseClient(
+//				tsdb.config.getString("tsd.storage.hbase.zk_quorum"),
+//				tsdb.config.getString("tsd.storage.hbase.zk_basedir"),
+//				new NioClientSocketChannelFactory());
+
+		HBaseClient hbClient = null;
+
 		final Scanner scanner = tsdb.client.newScanner(tsdb.table);
 		scanner.setMaxNumRows(tsdb.config.getHbaseClient_maxNumRows());
 		LOG.info("Start Row={}, End Row={}, Scan Start Time={}, Scan End Time={}",
@@ -710,7 +709,17 @@ final class TsdbQuery implements Query {
 			createAndSetFilter(scanner);
 		}
 		scanner.setFamily(TSDB.FAMILY);
-		return scanner;
+		return new ScannerClientPojo(hbClient, scanner);
+	}
+
+	class ScannerClientPojo {
+		final HBaseClient client;
+		final Scanner scanner;
+
+		public ScannerClientPojo(HBaseClient client, Scanner scanner) {
+			this.client = client;
+			this.scanner = scanner;
+		}
 	}
 
 	/**
@@ -735,7 +744,10 @@ final class TsdbQuery implements Query {
 			start /= 1000;
 		}
 
-		if (start > 0 && start % 3600 == 0) return start;
+		if (start > 0 && start % 3600 == 0) {
+			LOG.info("Returning non-timespan reduced value");
+			return start;
+		}
 
 		final long ts = start - Const.MAX_TIMESPAN * 2 - sample_interval_ms / 1000;
 		return ts > 0 ? ts : 0;

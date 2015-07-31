@@ -132,12 +132,14 @@ final class TSDMain {
 					usage(argp, "Invalid worker thread count", 1);
 				}
 			}
+			log.info("Starting factory with {} workers", workers);
 			factory = new NioServerSocketChannelFactory(
 					Executors.newCachedThreadPool(), Executors.newCachedThreadPool(),
 					workers);
 		} else {
 			factory = new OioServerSocketChannelFactory(
 					Executors.newCachedThreadPool(), Executors.newCachedThreadPool());
+			log.info("Starting factory with NON-async io workers");
 		}
 
 		try {
