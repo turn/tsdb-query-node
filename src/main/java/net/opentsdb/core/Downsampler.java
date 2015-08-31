@@ -12,13 +12,20 @@
 // see <http://www.gnu.org/licenses/>.
 package net.opentsdb.core;
 
+import java.util.Date;
 import java.util.NoSuchElementException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
  * Iterator that downsamples data points using an {@link Aggregator}.
  */
 public class Downsampler implements SeekableView, DataPoint {
+
+	private static final Logger LOG =
+			LoggerFactory.getLogger(Downsampler.class);
 
 	/**
 	 * Function to use for downsampling.
@@ -28,6 +35,22 @@ public class Downsampler implements SeekableView, DataPoint {
 	 * Iterator to iterate the values of the current interval.
 	 */
 	private final ValuesInInterval values_in_interval;
+
+	/**
+	 * Set to true if the {@link #values_in_interval} represents a monotonically increasing counter
+	 */
+	private final boolean isCounter;
+
+	/**
+	 * All values returned by {@link #next()} must be greater than base_value. Default = 0;
+	 */
+	private double base_value;
+
+	/**
+	 * The last value returned by the {@link #next()} method
+	 */
+	private Double last_value;
+
 	/**
 	 * Last normalized timestamp
 	 */
@@ -48,8 +71,28 @@ public class Downsampler implements SeekableView, DataPoint {
 	Downsampler(final SeekableView source,
 	            final long interval_ms,
 	            final Aggregator downsampler) {
+		this(source, interval_ms, downsampler, false);
+	}
+
+	/**
+	 * Ctor.
+	 *
+	 * @param source      The iterator to access the underlying data.
+	 * @param interval_ms The interval in milli seconds wanted between each data
+	 *                    point.
+	 * @param downsampler The downsampling function to use.
+	 * @param isCounter   set to true if we expect source to represent a monotonically increasing
+	 *                    function. For any drops in this value (for example, during service roll)
+	 *                    the numbers after the drop will be added to the last max value seen till
+	 *                    then. For multiple drops, the base value added to each post-drop data
+	 *                    point will be the sum of the max values seen just before the drop.
+	 */
+	Downsampler(final SeekableView source,
+	            final long interval_ms,
+	            final Aggregator downsampler, boolean isCounter) {
 		this.values_in_interval = new ValuesInInterval(source, interval_ms);
 		this.downsampler = downsampler;
+		this.isCounter = isCounter;
 	}
 
 	// ------------------ //
@@ -72,6 +115,7 @@ public class Downsampler implements SeekableView, DataPoint {
 	public DataPoint next() {
 		long hasNextStartTime = System.nanoTime();
 		if (hasNext()) {
+			last_value = value;
 			value = downsampler.runDouble(values_in_interval);
 			timestamp = values_in_interval.getIntervalTimestamp();
 			values_in_interval.moveToNextInterval();
@@ -118,12 +162,26 @@ public class Downsampler implements SeekableView, DataPoint {
 	}
 
 	public double doubleValue() {
-		return value;
+		return base_lift();
 	}
 
 	public double toDouble() {
-		return value;
+		return base_lift();
 	}
+
+	public double base_lift() {
+		if (isCounter) {
+			if (last_value > value) {
+				base_value += last_value;
+			}
+			LOG.info("Returning Lifted Value: {}, {}, {}", new Date(timestamp), base_value, base_value + value);
+			return base_value + value;
+		} else {
+			LOG.info("Returning: {}, {}", new Date(timestamp), value);
+			return value;
+		}
+	}
+
 
 	/**
 	 * Iterates source values for an interval.

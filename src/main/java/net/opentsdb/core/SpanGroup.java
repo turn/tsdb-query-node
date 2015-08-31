@@ -62,6 +62,11 @@ final class SpanGroup implements DataPoints {
 	private final long end_time;
 
 	/**
+	 * Handle to the TSDB we are running in.
+	 */
+	private final TSDB tsdb;
+
+	/**
 	 * The tags of this group.
 	 * This is the intersection set between the tags of all the Spans
 	 * in this group.
@@ -176,6 +181,7 @@ final class SpanGroup implements DataPoints {
 		this.aggregator = aggregator;
 		this.downsampler = downsampler;
 		this.sample_interval = interval;
+		this.tsdb = tsdb;
 	}
 
 	/**
@@ -402,7 +408,7 @@ final class SpanGroup implements DataPoints {
 		return AggregationIterator.create(spans, start_time, end_time, aggregator,
 				aggregator.interpolationMethod(),
 				downsampler, sample_interval,
-				rate, rate_options);
+				rate, rate_options, tsdb.getConfig().adjust_drops());
 	}
 
 	/**

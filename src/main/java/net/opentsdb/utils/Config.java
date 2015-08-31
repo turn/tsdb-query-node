@@ -145,6 +145,11 @@ public class Config {
 	private long parallel_scan_bucket_size = 3600;
 
 	/**
+	 * tsd.queryprocessing.adjust_drops
+	 */
+	private boolean adjust_drops = false;
+
+	/**
 	 * The list of properties configured to their defaults or modified by users
 	 */
 	protected final HashMap<String, String> properties =
@@ -561,6 +566,7 @@ public class Config {
 		default_map.put("tsd.search.plugin", "");
 		default_map.put("tsd.stats.canonical", "false");
 		default_map.put("tsd.storage.hbaseclient.maxNumRows", "768");
+		default_map.put("tsd.queryprocessing.adjust_drops", "true");
 		default_map.put("tsd.queryprocessing.parallel_scan.enable", "false");
 		default_map.put("tsd.queryprocessing.parallel_scan.threshold",
 				String.valueOf(TimeUnit.SECONDS.convert(365, TimeUnit.DAYS)));
@@ -699,6 +705,8 @@ public class Config {
 		fix_duplicates = this.getBoolean("tsd.storage.fix_duplicates");
 		hbaseclient_maxNumRows = this.getInt("tsd.storage.hbaseclient.maxNumRows");
 
+		adjust_drops = this.getBoolean("tsd.queryprocessing.adjust_drops");
+
 		parallel_scan_enable = this.getBoolean("tsd.queryprocessing.parallel_scan.enable");
 		parallel_scan_threshold_in_seconds = this.getLong("tsd.queryprocessing.parallel_scan.threshold");
 		parallel_scan_bucket_size = this.getLong("tsd.queryprocessing.parallel_scan.bucket_size");
@@ -734,4 +742,9 @@ public class Config {
 	public long parallel_scan_bucket_size() {
 		return parallel_scan_bucket_size;
 	}
+
+	public boolean adjust_drops() {
+		return adjust_drops;
+	}
+
 }

@@ -469,4 +469,9 @@ final class Span implements DataPoints {
 	                        final Aggregator downsampler) {
 		return new Downsampler(spanIterator(), interval_ms, downsampler);
 	}
+
+	Downsampler downsampler(final long interval_ms,
+	                        final Aggregator downsampler, boolean isCounter) {
+		return new Downsampler(spanIterator(), interval_ms, downsampler, isCounter);
+	}
 }

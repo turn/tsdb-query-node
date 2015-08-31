@@ -230,6 +230,7 @@ public final class AggregationIterator implements SeekableView, DataPoint,
 	 *                           of the actual values.
 	 * @param rate_options       Specifies the optional additional rate calculation
 	 *                           options.
+	 * @param adjust_drops       true if this iterator should correct counter resets
 	 * @return An {@link AggregationIterator} object.
 	 */
 	public static AggregationIterator create(final List<Span> spans,
@@ -240,7 +241,8 @@ public final class AggregationIterator implements SeekableView, DataPoint,
 	                                         final Aggregator downsampler,
 	                                         final long sample_interval_ms,
 	                                         final boolean rate,
-	                                         final RateOptions rate_options) {
+	                                         final RateOptions rate_options,
+	                                         boolean adjust_drops) {
 		final int size = spans.size();
 		final SeekableView[] iterators = new SeekableView[size];
 		for (int i = 0; i < size; i++) {
@@ -248,7 +250,11 @@ public final class AggregationIterator implements SeekableView, DataPoint,
 			if (downsampler == null) {
 				it = spans.get(i).spanIterator();
 			} else {
-				it = spans.get(i).downsampler(sample_interval_ms, downsampler);
+				if (adjust_drops) {
+					it = spans.get(i).downsampler(sample_interval_ms, downsampler, rate_options.isCounter());
+				} else {
+					it = spans.get(i).downsampler(sample_interval_ms, downsampler);
+				}
 			}
 			if (rate) {
 				it = new RateSpan(it, rate_options);
