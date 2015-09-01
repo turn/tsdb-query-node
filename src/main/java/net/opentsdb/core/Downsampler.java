@@ -12,20 +12,13 @@
 // see <http://www.gnu.org/licenses/>.
 package net.opentsdb.core;
 
-import java.util.Date;
 import java.util.NoSuchElementException;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 
 /**
  * Iterator that downsamples data points using an {@link Aggregator}.
  */
 public class Downsampler implements SeekableView, DataPoint {
-
-	private static final Logger LOG =
-			LoggerFactory.getLogger(Downsampler.class);
 
 	/**
 	 * Function to use for downsampling.
@@ -174,10 +167,8 @@ public class Downsampler implements SeekableView, DataPoint {
 			if (last_value > value) {
 				base_value += last_value;
 			}
-			LOG.info("Returning Lifted Value: {}, {}, {}", new Date(timestamp), base_value, base_value + value);
 			return base_value + value;
 		} else {
-			LOG.info("Returning: {}, {}", new Date(timestamp), value);
 			return value;
 		}
 	}
