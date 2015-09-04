@@ -21,7 +21,7 @@ ENV	      BASE /usr/share/opentsdb
 
 ADD	      tsdb-query-all* /usr/share/opentsdb/
 ADD	      runner.sh /usr/share/opentsdb/
-ADD	      *.sh logback.xml opentsdb.conf /usr/share/opentsdb/resources/
+ADD	      resources /usr/share/opentsdb/resources/
 
 CMD	      cd $BASE && ${BASE}/runner.sh ${PORT-8000}
 

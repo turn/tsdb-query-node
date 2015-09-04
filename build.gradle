@@ -4,7 +4,7 @@ apply plugin: 'maven'
 group = 'com.turn'
 version = '0.1'
 ext.image = rootProject.name
-ext.tag = 'docker-dev.turn.com:5000/asatish/' + image + ':' + version
+ext.tag = 'docker-dev.turn.com:5000/turn-tsdb/' + image + ':' + version
 
 description = "This project creates TSDs which will reside locally with the HBase region servers."
 
@@ -59,11 +59,9 @@ task copyJar(type: Copy, dependsOn: fatJar) {
 
 task copyConfig(type: Copy) {
     from('src/main/resources') {
-        include '*.sh'
-        include 'opentsdb.conf'
-        include 'logback.xml'
+        include '*'
     }
-    into('docker')
+    into('docker/resources')
 }
 
 task buildDockerImage(type: Exec, dependsOn: ['copyJar', 'copyConfig']) {
@@ -78,10 +76,10 @@ task pushDockerImage(type: Exec, dependsOn: tagDockerImage) {
 }
 
 clean.doLast {
-    [fatJar.archiveName, 'create_table.sh', 'logback.xml', 
-     'opentsdb.conf', 'upgrade_1to2.sh', 'mygnuplot.sh'].each { f ->
-        def cmd = 'rm -f docker/' + f 
-        println cmd
-        cmd.execute()
-    }
+    def cmd = "rm -f docker/${fatJar.archiveName}"
+    println cmd
+    cmd.execute()
+    cmd = "rm -rf docker/resources" 
+    println cmd
+    cmd.execute()
 }
