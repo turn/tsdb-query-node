@@ -3,6 +3,8 @@ apply plugin: 'maven'
 
 group = 'com.turn'
 version = '0.1'
+ext.image = rootProject.name
+ext.tag = 'docker-dev.turn.com:5000/asatish/' + image + ':' + version
 
 description = "This project creates TSDs which will reside locally with the HBase region servers."
 
@@ -40,4 +42,46 @@ dependencies {
     testCompile group: 'org.objenesis', name: 'objenesis', version:'1.3'
     testCompile group: 'org.powermock', name: 'powermock-api-mockito', version:'1.5.4'
     testCompile group: 'org.powermock', name: 'powermock-module-junit4', version:'1.5.4'
+}
+
+task fatJar(type: Jar, dependsOn: build) {
+    baseName = project.name + '-all'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    with jar
+}
+
+task copyJar(type: Copy, dependsOn: fatJar) {
+    from('build/libs') {
+        include fatJar.archiveName
+    }
+    into('docker')
+} 
+
+task copyConfig(type: Copy) {
+    from('src/main/resources') {
+        include '*.sh'
+        include 'opentsdb.conf'
+        include 'logback.xml'
+    }
+    into('docker')
+}
+
+task buildDockerImage(type: Exec, dependsOn: ['copyJar', 'copyConfig']) {
+    commandLine 'docker', 'build', '-t', image,  './docker'
+}
+
+task tagDockerImage(type: Exec, dependsOn: buildDockerImage) {
+    commandLine 'docker', 'tag', image, tag
+}
+task pushDockerImage(type: Exec, dependsOn: tagDockerImage) {
+    commandLine 'docker', 'push', image, tag
+}
+
+clean.doLast {
+    [fatJar.archiveName, 'create_table.sh', 'logback.xml', 
+     'opentsdb.conf', 'upgrade_1to2.sh', 'mygnuplot.sh'].each { f ->
+        def cmd = 'rm -f docker/' + f 
+        println cmd
+        cmd.execute()
+    }
 }
