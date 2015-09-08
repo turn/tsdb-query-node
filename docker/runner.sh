@@ -10,4 +10,4 @@ BASE=`pwd`
 
 echo ${BASE}
 
-java -server -classpath ${BASE}/src/main/resources/:${BASE}/target/dependency/*:${BASE}/target/tsdb-query-0.1.jar net.opentsdb.tools.TSDMain --port ${PORT} --config=${BASE}/src/main/resources/opentsdb.conf
+java -server -classpath /usr/share/opentsdb/resources/:${BASE}/tsdb-query-all-0.1.jar net.opentsdb.tools.TSDMain --port ${PORT} --config=${BASE}/resources/opentsdb.conf
