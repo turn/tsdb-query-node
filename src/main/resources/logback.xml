@@ -8,8 +8,18 @@
             </pattern>
         </encoder>
     </appender>
-    <appender name="CYCLIC" class="ch.qos.logback.core.read.CyclicBufferAppender">
-        <MaxSize>1024</MaxSize>
+
+    <appender name="ROLLING" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>/var/log/opentsdb/tsdb-query.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>/var/log/opentsdb/tsdb-query-%d{yyyy-MM-dd}.log.gz</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>
+                %d{ISO8601} %-5level [%thread] %logger{0}: %msg%n
+            </pattern>
+        </encoder>
     </appender>
 
     <logger name="org.apache.zookeeper" level="error"/>
@@ -17,6 +27,6 @@
     <logger name="com.stumbleupon.async" level="info"/>
     <root level="info">
         <appender-ref ref="STDOUT"/>
-        <appender-ref ref="CYCLIC"/>
+        <appender-ref ref="ROLLING"/>
     </root>
 </configuration>
