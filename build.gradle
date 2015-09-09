@@ -68,10 +68,6 @@ task buildDockerImage(type: Exec, dependsOn: ['copyJar', 'copyConfig']) {
     commandLine 'docker', 'build', '-t', image,  './docker'
 }
 
-buildDockerImage.doLast {
-	commandLine 'echo', 'hello'
-}
-
 task tagDockerImage(type: Exec, dependsOn: buildDockerImage) {
     commandLine 'docker', 'tag', image, tag
 }

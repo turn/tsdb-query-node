@@ -22,3 +22,5 @@
 # Gradle directories
 .gradle/
 build/
+docker/resources/
+docker/*.jar
