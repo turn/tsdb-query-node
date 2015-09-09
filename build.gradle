@@ -2,11 +2,11 @@ apply plugin: 'java'
 apply plugin: 'maven'
 
 group = 'com.turn'
-version = '0.1'
+version = '0.1.1'
 ext.image = rootProject.name
 ext.tag = 'docker-dev.turn.com:5000/turn-tsdb/' + image + ':' + version
 
-description = "This project creates TSDs which will reside locally with the HBase region servers."
+description = "This project creates TSDs which will run locally with the HBase region servers."
 
 sourceCompatibility = 1.6
 targetCompatibility = 1.6
@@ -68,11 +68,15 @@ task buildDockerImage(type: Exec, dependsOn: ['copyJar', 'copyConfig']) {
     commandLine 'docker', 'build', '-t', image,  './docker'
 }
 
+buildDockerImage.doLast {
+	commandLine 'echo', 'hello'
+}
+
 task tagDockerImage(type: Exec, dependsOn: buildDockerImage) {
     commandLine 'docker', 'tag', image, tag
 }
 task pushDockerImage(type: Exec, dependsOn: tagDockerImage) {
-    commandLine 'docker', 'push', image, tag
+    commandLine 'docker', 'push', tag
 }
 
 clean.doLast {
