@@ -12,41 +12,42 @@
 // see <http://www.gnu.org/licenses/>.
 package net.opentsdb.search;
 
-import java.util.Map;
-
 import net.opentsdb.utils.Config;
+
+import java.util.Map;
 
 /**
  * Overloads the default Config class with defaults for the ElasticSearch plugin
  */
 public final class ESPluginConfig extends Config {
 
-  /**
-   * Default constructor copies settings from the TSD
-   * @param parent The TSD config to copy
-   */
-  public ESPluginConfig(final Config parent) {
-    super(parent);
-  }
+	/**
+	 * Default constructor copies settings from the TSD
+	 *
+	 * @param parent The TSD config to copy
+	 */
+	public ESPluginConfig(final Config parent) {
+		super(parent);
+	}
 
-  /**
-  * Loads default entries that were not provided by a file or command line
-  */
-  @Override
-  protected void setDefaults() {
+	/**
+	 * Loads default entries that were not provided by a file or command line
+	 */
+	@Override
+	protected void setDefaults() {
 
-    default_map.put("tsd.search.elasticsearch.hosts", "");
-    default_map.put("tsd.search.elasticsearch.index_threads", "1");
-    default_map.put("tsd.search.elasticsearch.index", "opentsdb");
-    default_map.put("tsd.search.elasticsearch.tsmeta_type", "tsmeta");
-    default_map.put("tsd.search.elasticsearch.uidmeta_type", "uidmeta");
-    default_map.put("tsd.search.elasticsearch.annotation_type", "annotation");
-    default_map.put("tsd.search.elasticsearch.pool.max_per_route", "25");
-    default_map.put("tsd.search.elasticsearch.pool.max_total", "50");
+		default_map.put("tsd.search.elasticsearch.hosts", "");
+		default_map.put("tsd.search.elasticsearch.index_threads", "1");
+		default_map.put("tsd.search.elasticsearch.index", "opentsdb");
+		default_map.put("tsd.search.elasticsearch.tsmeta_type", "tsmeta");
+		default_map.put("tsd.search.elasticsearch.uidmeta_type", "uidmeta");
+		default_map.put("tsd.search.elasticsearch.annotation_type", "annotation");
+		default_map.put("tsd.search.elasticsearch.pool.max_per_route", "25");
+		default_map.put("tsd.search.elasticsearch.pool.max_total", "50");
 
-    for (Map.Entry<String, String> entry : default_map.entrySet()) {
-      if (!properties.containsKey(entry.getKey()))
-        properties.put(entry.getKey(), entry.getValue());
-    }
-  }
+		for (Map.Entry<String, String> entry : default_map.entrySet()) {
+			if (!properties.containsKey(entry.getKey()))
+				properties.put(entry.getKey(), entry.getValue());
+		}
+	}
 }
