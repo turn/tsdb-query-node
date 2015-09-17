@@ -7,12 +7,14 @@ RUN	      mkdir -p /data/opentsdb/cache
 
 RUN 	  mkdir -p /var/log/opentsdb
 
-ENV	      PORT 8000
-ENV	      CLASSPATH /usr/share/opentsdb
-ENV	      BASE /usr/share/opentsdb
+ENV	      CLASSPATH  /usr/share/opentsdb
+ENV	      BASE       /usr/share/opentsdb
+ENV	      TSDB_PORT  4244
 
 ADD	      tsdb-query-all* /usr/share/opentsdb/
 ADD	      runner.sh /usr/share/opentsdb/
 ADD	      resources /usr/share/opentsdb/resources/
 
-CMD	      cd ${BASE} && ./runner.sh ${PORT}
+WORKDIR   /usr/share/opentsdb/
+
+CMD	      ./runner.sh
