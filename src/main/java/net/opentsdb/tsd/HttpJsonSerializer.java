@@ -14,8 +14,10 @@ package net.opentsdb.tsd;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +45,7 @@ import net.opentsdb.tsd.QueryRpc.LastPointQuery;
 import net.opentsdb.tsd.expression.ExpressionTree;
 import net.opentsdb.utils.Config;
 import net.opentsdb.utils.JSON;
+import net.opentsdb.utils.JSONException;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBufferOutputStream;
 import org.jboss.netty.buffer.ChannelBuffers;
@@ -930,7 +933,7 @@ class HttpJsonSerializer extends HttpSerializer {
 	/**
 	 * Format a a list of TSMeta objects
 	 *
-	 * @param meta The list of TSMeta objects to serialize
+	 * @param metas The list of TSMeta objects to serialize
 	 * @return A JSON structure
 	 * @throws JSONException if serialization failed
 	 */
@@ -986,11 +989,11 @@ class HttpJsonSerializer extends HttpSerializer {
 	/**
 	 * Format a map of one or more TSUIDs that collided or were not matched
 	 *
-	 * @param results      The list of results. Collisions: key = tsuid, value =
-	 *                     collided TSUID. Not Matched: key = tsuid, value = message about non matched
-	 *                     rules.
-	 * @param is_collision Whether or the map is a collision result set (true) or
-	 *                     a not matched set (false).
+	 * @param results       The list of results. Collisions: key = tsuid, value =
+	 *                      collided TSUID. Not Matched: key = tsuid, value = message about non matched
+	 *                      rules.
+	 * @param is_collisions Whether or the map is a collision result set (true) or
+	 *                      a not matched set (false).
 	 * @return A JSON structure
 	 * @throws JSONException if serialization failed
 	 */
@@ -1039,7 +1042,7 @@ class HttpJsonSerializer extends HttpSerializer {
 	/**
 	 * Format the results of a bulk annotation deletion
 	 *
-	 * @param notes The annotation deletion request to return
+	 * @param request The annotation deletion request to return
 	 * @return A ChannelBuffer object to pass on to the caller
 	 * @throws JSONException if serialization failed
 	 */
@@ -1051,7 +1054,7 @@ class HttpJsonSerializer extends HttpSerializer {
 	/**
 	 * Format a list of statistics
 	 *
-	 * @param note The statistics list to format
+	 * @param stats The statistics list to format
 	 * @return A ChannelBuffer object to pass on to the caller
 	 * @throws JSONException if serialization failed
 	 */
@@ -1062,7 +1065,7 @@ class HttpJsonSerializer extends HttpSerializer {
 	/**
 	 * Format the response from a search query
 	 *
-	 * @param note The query (hopefully filled with results) to serialize
+	 * @param results The query (hopefully filled with results) to serialize
 	 * @return A ChannelBuffer object to pass on to the caller
 	 * @throws JSONException if serialization failed
 	 */

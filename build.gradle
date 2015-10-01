@@ -2,7 +2,7 @@ apply plugin: 'java'
 apply plugin: 'maven'
 
 group = 'com.turn'
-version = '0.1.1-18sep15'
+version = '0.1.1-30sep15'
 ext.image = rootProject.name
 ext.tag = 'docker-dev.turn.com:5000/turn-tsdb/' + image + ':' + version
 

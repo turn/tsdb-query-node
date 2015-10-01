@@ -730,9 +730,11 @@ final class TsdbQuery implements Query {
 			start /= 1000;
 		}
 
+		// we only to go back by one row in this special case (look at the explanation
+		// above for details)
 		if (start > 0 && start % 3600 == 0) {
-			LOG.info("Returning non-timespan reduced value");
-			return start;
+			LOG.info("Reducing timestamp by a single MAX_TIMESPAN value");
+			return start - Const.MAX_TIMESPAN - sample_interval_ms / 1000;
 		}
 
 		final long ts = start - Const.MAX_TIMESPAN * 2 - sample_interval_ms / 1000;
