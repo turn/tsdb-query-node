@@ -96,6 +96,7 @@ final class UidManager {
 		argp.addOption("--ignore-case",
 				"Ignore case distinctions when matching a regexp.");
 		argp.addOption("-i", "Short for --ignore-case.");
+		argp.addOption("--enable-search", "Enable search plugin");
 		args = CliOptions.parse(argp, args);
 		if (args == null) {
 			usage(argp, "Invalid usage");
@@ -115,6 +116,8 @@ final class UidManager {
 
 		// get a config object
 		Config config = CliOptions.getConfig(argp);
+		config.overrideConfig("tsd.search.enable", Boolean.toString(argp.has("--enable-search")));
+
 		final byte[] table = config.getString("tsd.storage.hbase.uid_table")
 				.getBytes();
 
@@ -1006,7 +1009,7 @@ final class UidManager {
 		}
 
 		// make sure buffered data is flushed to storage before exiting
-		tsdb.flush().joinUninterruptibly();
+		tsdb.shutdown().joinUninterruptibly();
 
 		final long duration = (System.currentTimeMillis() / 1000) - start_time;
 		LOG.info("Completed meta data synchronization in [" +
@@ -1128,5 +1131,4 @@ final class UidManager {
 		final TreeSync sync = new TreeSync(tsdb, 0, 1, 0);
 		return sync.purgeTree(tree_id, delete_definition);
 	}
-
 }

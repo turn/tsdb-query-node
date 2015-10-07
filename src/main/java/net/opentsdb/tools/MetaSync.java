@@ -197,8 +197,12 @@ final class MetaSync extends Thread {
 						return meta.syncToStorage(tsdb, false);
 					}
 				} else {
+					//update search plugin even if timestamp valid
+					//in case its our first time running metasync
+					tsdb.indexUIDMeta(meta);
 					LOG.debug("UID [" + UniqueId.uidToString(uid) +
 							"] of type [" + type + "] is up to date in storage");
+
 					return Deferred.fromResult(true);
 				}
 			}
@@ -263,7 +267,7 @@ final class MetaSync extends Thread {
 								// note that the increment call will create the meta object
 								// and send it to the search plugin so we don't have to do that
 								// here or in the local callback
-								return TSMeta.incrementAndGetCounter(tsdb, tsuid)
+								return TSMeta.incrementAndGetCounter(tsdb, tsuid, true)
 										.addCallbackDeferring(new CreatedCB());
 							} else {
 								TSMeta new_meta = new TSMeta(tsuid, timestamp);

@@ -2,7 +2,7 @@ apply plugin: 'java'
 apply plugin: 'maven'
 
 group = 'com.turn'
-version = '0.1.1-30sep15'
+version = '0.1.1-07oct15'
 ext.image = rootProject.name
 ext.tag = 'docker-dev.turn.com:5000/turn-tsdb/' + image + ':' + version
 
@@ -55,7 +55,7 @@ task copyJar(type: Copy, dependsOn: fatJar) {
         include fatJar.archiveName
     }
     into('docker')
-} 
+}
 
 task copyConfig(type: Copy) {
     from('src/main/resources') {
@@ -64,7 +64,7 @@ task copyConfig(type: Copy) {
     into('docker/resources')
 }
 
-task buildDockerImage(type: Exec, dependsOn: ['copyJar', 'copyConfig']) {
+task buildDockerImage(type: Exec, dependsOn: ['copyJar', 'copyConfig', 'opentsdb-elasticsearch:copyPluginFolder']) {
     commandLine 'docker', 'build', '-t', image,  './docker'
 }
 
@@ -80,6 +80,9 @@ clean.doLast {
     println cmd
     cmd.execute()
     cmd = "rm -rf docker/resources" 
+    println cmd
+    cmd.execute()
+    cmd = "rm -rf docker/plugins"
     println cmd
     cmd.execute()
 }

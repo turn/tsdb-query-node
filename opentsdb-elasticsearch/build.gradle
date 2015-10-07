@@ -63,8 +63,14 @@ task pluginJar(type: Copy, dependsOn:shadowJar) {
     include '**/opentsdb-elasticsearch-1.0-all.jar'
 }
 
+task copyPluginFolder(type: Copy, dependsOn: pluginJar) {
+    from rootProject.rootDir.canonicalPath + "/plugins"
+    include 'opentsdb-elasticsearch-1.0-all.jar'
+    into rootProject.rootDir.canonicalPath + "/docker/plugins"
+}
+
 build {
-    finalizedBy pluginJar
+    finalizedBy copyPluginFolder
 }
 
 
