@@ -33,7 +33,7 @@ import net.opentsdb.core.TSDB;
 import net.opentsdb.core.TSQuery;
 import net.opentsdb.core.TSSubQuery;
 import net.opentsdb.core.Tags;
-import net.opentsdb.core.metrics.Timer;
+import com.codahale.metrics.Timer;
 import net.opentsdb.meta.Annotation;
 import net.opentsdb.meta.TSUIDQuery;
 import net.opentsdb.tsd.expression.ExpressionTree;
