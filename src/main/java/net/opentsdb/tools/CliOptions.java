@@ -154,6 +154,8 @@ final class CliOptions {
 				config.overrideConfig("tsd.network.async_io", entry.getValue());
 			} else if (entry.getKey().toLowerCase().equals("--worker-threads")) {
 				config.overrideConfig("tsd.network.worker_threads", entry.getValue());
+			} else if (entry.getKey().toLowerCase().equals("--enable-search")) {
+				config.overrideConfig("tsd.search.enable", entry.getValue());
 			}
 		}
 	}

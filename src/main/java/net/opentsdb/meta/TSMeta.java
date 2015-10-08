@@ -559,7 +559,19 @@ public final class TSMeta {
 	 */
 	public static Deferred<Long> incrementAndGetCounter(final TSDB tsdb,
 	                                                    final byte[] tsuid) {
+		return TSMeta.incrementAndGetCounter(tsdb, tsuid, false);
+	}
 
+	/**
+	 *
+	 * @param tsdb
+	 * @param tsuid
+	 * @param forceUpdateMetadata if true will create a new TSMeta object and push to search plugin
+	 *                            if false will only update metadata if enable_realtime_ts is true in config
+	 * @return
+	 */
+	public static Deferred<Long> incrementAndGetCounter(final TSDB tsdb, final byte[] tsuid, boolean forceUpdateMetadata)
+	{
 		/**
 		 * Callback that will create a new TSMeta if the increment result is 1 or
 		 * will simply return the new value.
@@ -657,7 +669,9 @@ public final class TSMeta {
 				tsdb.metaTable(), tsuid, FAMILY, COUNTER_QUALIFIER);
 		// if the user has disabled real time TSMeta tracking (due to OOM issues)
 		// then we only want to increment the data point count.
-		if (!tsdb.getConfig().enable_realtime_ts()) {
+		// however in case where this is called by Metasync we don't care
+		// if enable_realtime_ts is set in config we will force metadata to be updated
+		if (!tsdb.getConfig().enable_realtime_ts() && !forceUpdateMetadata) {
 			return tsdb.getClient().bufferAtomicIncrement(inc);
 		}
 		return tsdb.getClient().bufferAtomicIncrement(inc).addCallbackDeferring(
