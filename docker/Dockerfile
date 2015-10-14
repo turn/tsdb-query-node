@@ -1,27 +1,23 @@
-FROM ubuntu:latest
-MAINTAINER arjun.satish@turn.com
-
-# Install some basic utils
-RUN           sudo apt-get update
-RUN           sudo apt-get upgrade -y
-RUN           sudo apt-get install -y software-properties-common
-
-# Install Java
-# Java should be installed before anything else to avoid version problems
-RUN           sudo apt-get install -y openjdk-7-jre openjdk-7-jdk
-RUN           sudo apt-get install -y vim
+FROM docker.turn.com/tops-base/jdk7:latest
+MAINTAINER instrumentation@turn.com
 
 RUN	      mkdir -p /usr/share/opentsdb/static/
 RUN	      mkdir -p /usr/share/opentsdb/resources/
 RUN	      mkdir -p /data/opentsdb/cache
 
-ENV	      PORT 8000
-ENV	      CLASSPATH /usr/share/opentsdb
-ENV	      BASE /usr/share/opentsdb
+RUN 	  mkdir -p /var/log/opentsdb
 
-ADD	      tsdb-query-all* /usr/share/opentsdb/
-ADD	      runner.sh /usr/share/opentsdb/
-ADD	      resources /usr/share/opentsdb/resources/
+ENV	      CLASSPATH  /usr/share/opentsdb
+ENV	      BASE       /usr/share/opentsdb
+ENV	      TSDB_PORT  4244
+ENV		  ENABLE_SEARCH false
 
-CMD	      cd $BASE && ${BASE}/runner.sh ${PORT-8000}
+ADD       tsdb-query-all* /usr/share/opentsdb/
+ADD       runner.sh /usr/share/opentsdb/
+ADD       meta_sync_runner.sh /usr/share/opentsdb/
+ADD       resources /usr/share/opentsdb/resources/
+ADD       plugins /usr/share/opentsdb/plugins
 
+WORKDIR   /usr/share/opentsdb/
+
+CMD	      ./runner.sh

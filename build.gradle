@@ -2,11 +2,15 @@ apply plugin: 'java'
 apply plugin: 'maven'
 
 group = 'com.turn'
-version = '0.1'
+version = '0.1.1-07oct15'
 ext.image = rootProject.name
-ext.tag = 'docker-dev.turn.com:5000/turn-tsdb/' + image + ':' + version
+ext.urlDev = 'docker-dev.turn.com:5000'
+ext.urlProd = 'docker.turn.com'
+ext.namespace = '/turn-tsdb/'
+ext.tagDev = urlDev + namespace + image + ':' + version
+ext.tagProd = urlProd + namespace + image + ':' + version
 
-description = "This project creates TSDs which will reside locally with the HBase region servers."
+description = "This project creates TSDs which will run locally with the HBase region servers."
 
 sourceCompatibility = 1.6
 targetCompatibility = 1.6
@@ -35,6 +39,7 @@ dependencies {
     compile group: 'ch.qos.logback', name: 'logback-core', version:'1.0.13'
     compile group: 'ch.qos.logback', name: 'logback-classic', version:'1.0.13'
     compile group: 'com.google.gwt', name: 'gwt-user', version:'2.6.0'
+    compile group: 'io.dropwizard.metrics', name: 'metrics-core', version:'3.1.0'
     testCompile group: 'org.hamcrest', name: 'hamcrest-core', version:'1.3'
     testCompile group: 'org.javassist', name: 'javassist', version:'3.18.1-GA'
     testCompile group: 'junit', name: 'junit', version:'4.11'
@@ -55,7 +60,7 @@ task copyJar(type: Copy, dependsOn: fatJar) {
         include fatJar.archiveName
     }
     into('docker')
-} 
+}
 
 task copyConfig(type: Copy) {
     from('src/main/resources') {
@@ -64,15 +69,25 @@ task copyConfig(type: Copy) {
     into('docker/resources')
 }
 
-task buildDockerImage(type: Exec, dependsOn: ['copyJar', 'copyConfig']) {
+task buildDockerImage(type: Exec, dependsOn: ['copyJar', 'copyConfig', 'opentsdb-elasticsearch:copyPluginFolder']) {
     commandLine 'docker', 'build', '-t', image,  './docker'
 }
 
-task tagDockerImage(type: Exec, dependsOn: buildDockerImage) {
-    commandLine 'docker', 'tag', image, tag
+task tagDockerDevImage(type: Exec, dependsOn: buildDockerImage) {
+    commandLine 'docker', 'tag', image, tagDev
 }
-task pushDockerImage(type: Exec, dependsOn: tagDockerImage) {
-    commandLine 'docker', 'push', image, tag
+
+task tagDockerProdImage(type: Exec, dependsOn: buildDockerImage) {
+    commandLine 'docker', 'tag', image, tagProd
+}
+
+task pushDockerDevImage(type: Exec, dependsOn: tagDockerDevImage) {
+    commandLine 'docker', 'push', tagDev
+}
+
+task pushDockerProdImage(type: Exec, dependsOn: tagDockerProdImage) {
+    environment 'HOME', '.'
+    commandLine 'docker', 'push', tagProd
 }
 
 clean.doLast {
@@ -80,6 +95,9 @@ clean.doLast {
     println cmd
     cmd.execute()
     cmd = "rm -rf docker/resources" 
+    println cmd
+    cmd.execute()
+    cmd = "rm -rf docker/plugins"
     println cmd
     cmd.execute()
 }

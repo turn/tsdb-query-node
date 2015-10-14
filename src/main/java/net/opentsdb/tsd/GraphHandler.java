@@ -45,7 +45,7 @@ import net.opentsdb.core.RateOptions;
 import net.opentsdb.core.TSDB;
 import net.opentsdb.core.TSQuery;
 import net.opentsdb.core.Tags;
-import net.opentsdb.core.metrics.Timer;
+import com.codahale.metrics.Timer;
 import net.opentsdb.graph.Plot;
 import net.opentsdb.stats.Histogram;
 import net.opentsdb.stats.StatsCollector;

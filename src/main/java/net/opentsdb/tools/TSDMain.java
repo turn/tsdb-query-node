@@ -84,6 +84,9 @@ final class TSDMain {
 		argp.addOption("--flush-interval", "MSEC",
 				"Maximum time for which a new data point can be buffered"
 						+ " (default: " + DEFAULT_FLUSH_INTERVAL + ").");
+		argp.addOption("--enable-search", "true|false",
+				"Enable search plugin (default false)");
+
 		CliOptions.addAutoMetricFlag(argp);
 		args = CliOptions.parse(argp, args);
 		args = null; // free().

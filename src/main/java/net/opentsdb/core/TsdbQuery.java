@@ -23,10 +23,10 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 
+import com.codahale.metrics.Timer;
 import com.google.common.annotations.VisibleForTesting;
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
-import net.opentsdb.core.metrics.Timer;
 import net.opentsdb.stats.Histogram;
 import net.opentsdb.tsd.QueryStats;
 import net.opentsdb.uid.NoSuchUniqueName;
@@ -36,7 +36,6 @@ import org.hbase.async.HBaseClient;
 import org.hbase.async.HBaseException;
 import org.hbase.async.KeyValue;
 import org.hbase.async.Scanner;
-import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -730,9 +729,11 @@ final class TsdbQuery implements Query {
 			start /= 1000;
 		}
 
+		// we only to go back by one row in this special case (look at the explanation
+		// above for details)
 		if (start > 0 && start % 3600 == 0) {
-			LOG.info("Returning non-timespan reduced value");
-			return start;
+			LOG.info("Reducing timestamp by a single MAX_TIMESPAN value");
+			return start - Const.MAX_TIMESPAN - sample_interval_ms / 1000;
 		}
 
 		final long ts = start - Const.MAX_TIMESPAN * 2 - sample_interval_ms / 1000;

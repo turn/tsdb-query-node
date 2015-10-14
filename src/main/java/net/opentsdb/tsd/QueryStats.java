@@ -4,10 +4,10 @@
  */
 package net.opentsdb.tsd;
 
-import net.opentsdb.core.metrics.Counter;
-import net.opentsdb.core.metrics.Histogram;
-import net.opentsdb.core.metrics.MetricRegistry;
-import net.opentsdb.core.metrics.Timer;
+import com.codahale.metrics.Counter;
+import com.codahale.metrics.Histogram;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import net.opentsdb.stats.StatsCollector;
 
 public class QueryStats {

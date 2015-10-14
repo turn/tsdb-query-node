@@ -1,0 +1,77 @@
+apply plugin: 'java'
+apply plugin: 'maven'
+
+buildscript {
+    repositories {
+        maven {
+            url "https://plugins.gradle.org/m2/"
+        }
+    }
+    dependencies {
+        classpath "com.github.jengelman.gradle.plugins:shadow:1.2.2"
+    }
+}
+
+apply plugin: "com.github.johnrengelman.shadow"
+
+group = 'net.opentsdb'
+version = '1.0'
+
+description = """opentsdb-elasticsearch"""
+
+sourceCompatibility = 1.5
+targetCompatibility = 1.5
+
+
+
+repositories {
+        
+     maven { url "https://github.com/mcaprari/mcaprari-maven-repo/raw/master/releases" }
+     maven { url "https://github.com/mcaprari/mcaprari-maven-repo/raw/master/snapshots" }
+     maven { url "http://repo.maven.apache.org/maven2" }
+}
+dependencies {
+    compile group: 'org.apache.httpcomponents', name: 'httpclient', version:'4.2.3'
+    compile group: 'org.apache.httpcomponents', name: 'httpcore', version:'4.2.3'
+    compile group: 'org.apache.httpcomponents', name: 'fluent-hc', version:'4.2.3'
+    compile group: 'httpfailover', name: 'httpclient-failover', version:'1.0'
+    compile group: 'com.stumbleupon', name: 'async', version:'1.3.1'
+    compile group: 'com.google.guava', name: 'guava', version:'13.0.1'
+    compile group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version:'2.1.4'
+    compile group: 'com.fasterxml.jackson.core', name: 'jackson-core', version:'2.1.4'
+    compile group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version:'2.1.4'
+}
+
+sourceSets {
+    main {
+        compileClasspath += rootProject.sourceSets.main.output
+        runtimeClasspath += compileClasspath
+
+        java {
+            srcDir 'src/net/opentsdb'
+        }
+    }
+}
+
+shadowJar {
+    mergeServiceFiles()
+}
+
+task pluginJar(type: Copy, dependsOn:shadowJar) {
+    from 'build/libs/'
+    into rootProject.rootDir.canonicalPath + "/plugins"
+    include '**/opentsdb-elasticsearch-1.0-all.jar'
+}
+
+task copyPluginFolder(type: Copy, dependsOn: pluginJar) {
+    from rootProject.rootDir.canonicalPath + "/plugins"
+    include 'opentsdb-elasticsearch-1.0-all.jar'
+    into rootProject.rootDir.canonicalPath + "/docker/plugins"
+}
+
+build {
+    finalizedBy copyPluginFolder
+}
+
+
+
