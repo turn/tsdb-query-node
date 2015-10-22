@@ -2,7 +2,7 @@ apply plugin: 'java'
 apply plugin: 'maven'
 
 group = 'com.turn'
-version = '0.1.1-07oct15'
+version = '0.1.1-2015102202'
 ext.image = rootProject.name
 ext.urlDev = 'docker-dev.turn.com:5000'
 ext.urlProd = 'docker.turn.com'
@@ -88,6 +88,11 @@ task pushDockerDevImage(type: Exec, dependsOn: tagDockerDevImage) {
 task pushDockerProdImage(type: Exec, dependsOn: tagDockerProdImage) {
     environment 'HOME', '.'
     commandLine 'docker', 'push', tagProd
+}
+
+task getDeps(type: Copy) {
+  from sourceSets.main.runtimeClasspath
+  into 'runtime/'
 }
 
 clean.doLast {
