@@ -24,3 +24,5 @@
 build/
 docker/resources/
 docker/*.jar
+plugins/
+docker/plugins/
