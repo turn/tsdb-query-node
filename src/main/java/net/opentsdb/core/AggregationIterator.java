@@ -116,10 +116,10 @@ import org.slf4j.LoggerFactory;
  * to a special, really large value (too large to be a valid timestamp).
  * <p/>
  */
-public final class AggregationIterator implements SeekableView, DataPoint,
+public class AggregationIterator implements SeekableView, DataPoint,
 		Aggregator.Longs, Aggregator.Doubles {
 
-	private static final Logger LOG =
+	protected static final Logger LOG =
 			LoggerFactory.getLogger(AggregationIterator.class);
 
 	/**
@@ -133,7 +133,7 @@ public final class AggregationIterator implements SeekableView, DataPoint,
 	 * possibly store, provided that the most significant bit is reserved by
 	 * FLAG_FLOAT.
 	 */
-	private static final long TIME_MASK = 0x7FFFFFFFFFFFFFFFL;
+	protected static final long TIME_MASK = 0x7FFFFFFFFFFFFFFFL;
 
 	/**
 	 * Aggregator to use to aggregate data points from different Spans.
@@ -158,7 +158,7 @@ public final class AggregationIterator implements SeekableView, DataPoint,
 	 * Once we reach the end of a Span, we'll null out its iterator from this
 	 * array.
 	 */
-	private final SeekableView[] iterators;
+	protected final SeekableView[] iterators;
 
 	/**
 	 * Start time (UNIX timestamp in seconds or ms) on 32 bits ("unsigned" int).
@@ -168,7 +168,7 @@ public final class AggregationIterator implements SeekableView, DataPoint,
 	/**
 	 * End time (UNIX timestamp in seconds or ms) on 32 bits ("unsigned" int).
 	 */
-	private final long end_time;
+	protected final long end_time;
 
 	/**
 	 * The current and previous timestamps for the data points being used.
@@ -192,7 +192,7 @@ public final class AggregationIterator implements SeekableView, DataPoint,
 	 * linear interpolation anymore.</li>
 	 * </ul>
 	 */
-	private final long[] timestamps; // 32 bit unsigned + flag
+	protected final long[] timestamps; // 32 bit unsigned + flag
 
 	/**
 	 * The current and next values for the data points being used.
@@ -200,12 +200,12 @@ public final class AggregationIterator implements SeekableView, DataPoint,
 	 * This array is also used to store floating point values, in which case
 	 * their binary representation just happens to be stored in a {@code long}.
 	 */
-	private final long[] values;
+	protected final long[] values;
 
 	/**
 	 * The index in {@link #iterators} of the current Span being used.
 	 */
-	private int current;
+	protected int current;
 
 	/**
 	 * The index in {@link #values} of the current value being aggregated.
@@ -449,6 +449,7 @@ public final class AggregationIterator implements SeekableView, DataPoint,
 				throw new NoSuchElementException("no more elements");
 			}
 			moveToNext(current);
+
 			if (multiple) {
 				//LOG.debug("Moving multiple DPs at time " + min_ts);
 				// We know we saw at least one other data point with the same minimum
@@ -585,6 +586,7 @@ public final class AggregationIterator implements SeekableView, DataPoint,
 	 */
 	private boolean hasNextValue(boolean update_pos) {
 		final int size = iterators.length;
+
 		for (int i = pos + 1; i < size; i++) {
 			if (timestamps[i] != 0) {
 				//LOG.debug("hasNextValue -> true #" + i);
