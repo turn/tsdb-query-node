@@ -1,7 +1,7 @@
 FROM docker.turn.com/tops-base/jdk7:latest
 MAINTAINER instrumentation@turn.com
 
-ENV       VERSION 0.1.1-2015113001
+ENV       VERSION 0.1.1-2015113002
 ENV       WORKDIR /usr/share/opentsdb
 ENV       LOGDIR  /var/log/opentsdb
 ENV       DATADIR /data/opentsdb
