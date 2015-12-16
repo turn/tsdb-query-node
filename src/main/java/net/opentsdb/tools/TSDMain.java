@@ -86,6 +86,8 @@ final class TSDMain {
 						+ " (default: " + DEFAULT_FLUSH_INTERVAL + ").");
 		argp.addOption("--enable-search", "true|false",
 				"Enable search plugin (default false)");
+		argp.addOption("--read-only", "true|false",
+				"Set tsd.mode to ro (default false)");
 
 		CliOptions.addAutoMetricFlag(argp);
 		args = CliOptions.parse(argp, args);
