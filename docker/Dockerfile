@@ -1,7 +1,7 @@
 FROM docker.turn.com/tops-base/jdk7:latest
 MAINTAINER instrumentation@turn.com
 
-ENV       VERSION 0.1.1-2015121501
+ENV       VERSION 0.1.1-2015121502
 ENV       WORKDIR /usr/share/opentsdb
 ENV       LOGDIR  /var/log/opentsdb
 ENV       DATADIR /data/opentsdb
@@ -24,6 +24,6 @@ ADD       plugins $WORKDIR/plugins/
 
 VOLUME ["/etc/opentsdb"]
 
-ENTRYPOINT /bin/bash -c "java -server -classpath $WORKDIR/resources:$WORKDIR:$WORKDIR/tsdb-query-all-$VERSION.jar net.opentsdb.tools.TSDMain --port $TSDB_PORT --config=/etc/opentsdb/opentsdb.conf --enable-search=${SEARCH}"
+ENTRYPOINT /bin/bash -c "java -server -classpath $WORKDIR/resources:$WORKDIR:$WORKDIR/tsdb-query-all-$VERSION.jar net.opentsdb.tools.TSDMain --port $TSDB_PORT --read-only --config=/etc/opentsdb/opentsdb.conf --enable-search=${SEARCH}"
 
 

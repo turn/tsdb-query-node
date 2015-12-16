@@ -144,6 +144,8 @@ final class CliOptions {
 				config.overrideConfig("tsd.http.staticroot", entry.getValue());
 			} else if (entry.getKey().toLowerCase().equals("--cachedir")) {
 				config.overrideConfig("tsd.http.cachedir", entry.getValue());
+			} else if (entry.getKey().toLowerCase().equals("--read-only")) {
+				config.overrideConfig("tsd.mode", "ro");
 			} else if (entry.getKey().toLowerCase().equals("--flush-interval")) {
 				config.overrideConfig("tsd.core.flushinterval", entry.getValue());
 			} else if (entry.getKey().toLowerCase().equals("--backlog")) {
